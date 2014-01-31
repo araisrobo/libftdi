@@ -1,0 +1,29 @@
+Source: libftdi-1.0
+Priority: extra
+Maintainer: Yi-Shin Li <ysli@araisrobo.com>
+Build-Depends:  debhelper (>= 7), autotools-dev, build-essential, autoconf,
+                automake, libtool, pkg-config (>= 0.18), libusb-1.0-0-dev
+Standards-Version: 3.8.3
+Section: libs
+Homepage: http://www.intra2net.com/en/developer/libftdi/
+
+Package: libftdi-1.0-dev
+Section: libdevel
+Architecture: any
+Depends: libftdi-1.0 (= ${binary:Version}), libusb-1.0-0-dev
+Description: Development files for libftdi
+ This package contains the header files and static library needed to
+ compile applications that use libftdi.
+
+Package: libftdi-1.0
+Section: libs
+Architecture: any
+Depends: libusb-1.0-0
+Description: Library to control and program the FTDI USB controller
+ This library could talk to FTDI's FT232 and FT245 type USB chips from 
+ userspace. It uses libusb to communicate with the chips.
+ .
+ Functionalities include the possibility to use the chips in standard
+ mode, in bitbang mode, and to read or write the serial EEPROM.
+ .
+ This is the C version of the library.
