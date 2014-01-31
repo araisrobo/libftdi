@@ -227,6 +227,7 @@ struct ftdi_context
     int usb_read_timeout;
     /** usb write timeout */
     int usb_write_timeout;
+    int usb_connected;
 
     /* FTDI specific */
     /** FTDI chip type */

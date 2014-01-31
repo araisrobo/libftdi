@@ -28,9 +28,13 @@ tar ball.
 cd libftdi
 mkdir build
 cd build
+# for libusbx (libusb-1.0)
+export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 cmake  -DCMAKE_INSTALL_PREFIX="/usr" ../
-make
-sudo make install
+# check build/CMakeCache.txt for libusb-1.0 path. should be at /usr/local/lib/
+# remove previous installed libftdi package:
+# sudo apt-get purge libftdi-1.0 libftdi-1.0-dev
+make && cpack ../ && sudo dpkg -i libftdi1-1.0.deb
 
 5) carry out some tests
 cd examples
