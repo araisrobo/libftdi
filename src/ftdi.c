@@ -1513,7 +1513,7 @@ static void ftdi_read_data_cb(struct libusb_transfer *transfer)
 {
     struct ftdi_transfer_control *tc = (struct ftdi_transfer_control *) transfer->user_data;
     struct ftdi_context *ftdi = tc->ftdi;
-    int packet_size, actual_length, num_of_chunks, chunk_remains, i, ret;
+    int packet_size, actual_length, num_of_chunks, chunk_remains, i;
 
     packet_size = ftdi->max_packet_size;
 
@@ -1588,9 +1588,12 @@ static void ftdi_read_data_cb(struct libusb_transfer *transfer)
             }
         }
     }
-    ret = libusb_submit_transfer (transfer);
-    if (ret < 0)
-        tc->completed = 1;
+
+//    ret = libusb_submit_transfer (transfer);
+//    if (ret < 0)
+//        tc->completed = 1;
+    tc->completed = libusb_submit_transfer (transfer);
+    return;
 }
 
 
@@ -1608,16 +1611,18 @@ static void ftdi_write_data_cb(struct libusb_transfer *transfer)
     else
     {
         int write_size = ftdi->writebuffer_chunksize;
-        int ret;
+//        int ret;
 
         if (tc->offset + write_size > tc->size)
             write_size = tc->size - tc->offset;
 
         transfer->length = write_size;
         transfer->buffer = tc->buf + tc->offset;
-        ret = libusb_submit_transfer (transfer);
-        if (ret < 0)
-            tc->completed = 1;
+//        ret = libusb_submit_transfer (transfer);
+//        if (ret < 0)
+//            tc->completed = 1;
+        tc->completed = libusb_submit_transfer (transfer);
+        return;
     }
 }
 
@@ -1857,7 +1862,7 @@ int ftdi_transfer_data_done(struct ftdi_transfer_control *tc)
      **/
     if (tc->transfer) {
         if (tc->transfer->status != LIBUSB_TRANSFER_COMPLETED) {
-            DP ("ERROR transfer->status(%d)\n", tc->transfer->status);
+            ERRP ("ERROR transfer->status(%d)\n", tc->transfer->status);
             DP("about to libusb_cancel_transfer()...\n");
             ret = libusb_cancel_transfer(tc->transfer);
             if (ret == 0) { // successfully canceled
@@ -1865,7 +1870,7 @@ int ftdi_transfer_data_done(struct ftdi_transfer_control *tc)
                 assert (tc->ftdi->usb_dev != NULL);
                 libusb_handle_events_timeout_completed(tc->ftdi->usb_ctx, &tv, &(tc->completed));
             } else {
-                DP("ERROR with libusb_cancel_transfer() ret(%d)n", ret);
+                ERRP("ERROR with libusb_cancel_transfer() ret(%d)n", ret);
             }
             ret = -1;
             DP("about to libusb_free_transfer()...\n");
