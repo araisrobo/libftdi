@@ -105,13 +105,13 @@ static int LIBUSB_CALL ftdi_hotplug_callback(libusb_context *ctx, libusb_device 
 
         ret = libusb_get_device_descriptor(dev, &desc);
         if (LIBUSB_SUCCESS != ret) {
-                fprintf (stderr, "Error getting device descriptor\n");
+                ERRP ("Error getting device descriptor\n");
         }
-        printf ("Device attached: %04x:%04x\n", desc.idVendor, desc.idProduct);
+        ERRP ("Device attached: %04x:%04x\n", desc.idVendor, desc.idProduct);
 
         ret = ftdi_usb_open_dev(ftdi, dev);
         if (LIBUSB_SUCCESS != ret) {
-            fprintf(stderr,"Can't open ftdi device: %s\n",ftdi_get_error_string(ftdi));
+            ERRP ("Can't open ftdi device: %s\n",ftdi_get_error_string(ftdi));
         }
         return 0;
 }
@@ -125,9 +125,9 @@ static int LIBUSB_CALL ftdi_hotplug_callback_detach(libusb_context *ctx, libusb_
         ftdi = (struct ftdi_context *) user_data;
         ret = libusb_get_device_descriptor(dev, &desc);
         if (LIBUSB_SUCCESS != ret) {
-                fprintf (stderr, "Error getting device descriptor\n");
+                ERRP ("Error getting device descriptor\n");
         }
-        printf ("Device detached: %04x:%04x\n", desc.idVendor, desc.idProduct);
+        ERRP ("Device detached: %04x:%04x\n", desc.idVendor, desc.idProduct);
 
         assert (ftdi != NULL);
         ftdi->usb_connected = 0;
@@ -1646,9 +1646,16 @@ struct ftdi_transfer_control *ftdi_write_data_submit(struct ftdi_context *ftdi, 
     struct ftdi_transfer_control *tc;
     struct libusb_transfer *transfer;
     int write_size, ret;
+    struct timeval tv = {0,0};
 
     if (ftdi == NULL || ftdi->usb_dev == NULL)
         return NULL;
+
+    DP("about to libusb_handle_events_timeout_completed()...\n");
+    ret = libusb_handle_events_timeout_completed(ftdi->usb_ctx, &tv, NULL);
+    if (ret < 0) {
+        return NULL;
+    }
 
     tc = (struct ftdi_transfer_control *) malloc (sizeof (*tc));
     if (!tc)
@@ -1713,7 +1720,8 @@ struct ftdi_transfer_control *ftdi_read_data_submit(struct ftdi_context *ftdi, u
     struct ftdi_transfer_control *tc;
     struct libusb_transfer *transfer;
     int ret, ret1;
-    
+    struct timeval tv = {0,0};
+
     if (ftdi == NULL || ftdi->usb_dev == NULL) {
         DP ("ftdi(%p) ftdi->usb_dev(%p)\n", ftdi, ftdi->usb_dev);
         ftdi_error_return(NULL, "invalid ftdi context OR invalid usb device\n");
@@ -1721,6 +1729,12 @@ struct ftdi_transfer_control *ftdi_read_data_submit(struct ftdi_context *ftdi, u
 
     if (size > ftdi->readbuffer_chunksize) {
         ftdi_error_return(NULL, "request size is greater than readbuffer_chunksize\n");
+    }
+
+    DP("about to libusb_handle_events_timeout_completed()...\n");
+    ret = libusb_handle_events_timeout_completed(ftdi->usb_ctx, &tv, NULL);
+    if (ret < 0) {
+        return NULL;
     }
 
     tc = (struct ftdi_transfer_control *) malloc (sizeof (*tc));
@@ -1870,7 +1884,7 @@ int ftdi_transfer_data_done(struct ftdi_transfer_control *tc)
                 assert (tc->ftdi->usb_dev != NULL);
                 libusb_handle_events_timeout_completed(tc->ftdi->usb_ctx, &tv, &(tc->completed));
             } else {
-                ERRP("ERROR with libusb_cancel_transfer() ret(%d)n", ret);
+                ERRP("ERROR with libusb_cancel_transfer() ret(%d)\n", ret);
             }
             ret = -1;
             DP("about to libusb_free_transfer()...\n");
