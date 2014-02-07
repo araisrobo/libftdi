@@ -100,8 +100,16 @@ static int LIBUSB_CALL ftdi_hotplug_callback(libusb_context *ctx, libusb_device 
         struct libusb_device_descriptor desc;
         int ret;
         struct ftdi_context * ftdi; 
+        struct timeval tv = {0,0};
 
         ftdi = (struct ftdi_context *) user_data;
+
+        do {
+            ret = libusb_handle_events_timeout_completed(ftdi->usb_ctx, &tv, NULL);
+            if (ret < 0) {
+                ERRP ("libusb_handle_events_timeout_completed: %d\n", ret);
+            }
+        } while (ret < 0);
 
         ret = libusb_get_device_descriptor(dev, &desc);
         if (LIBUSB_SUCCESS != ret) {
@@ -113,6 +121,7 @@ static int LIBUSB_CALL ftdi_hotplug_callback(libusb_context *ctx, libusb_device 
         if (LIBUSB_SUCCESS != ret) {
             ERRP ("Can't open ftdi device: %s\n",ftdi_get_error_string(ftdi));
         }
+
         return 0;
 }
 
