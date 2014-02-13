@@ -1567,7 +1567,13 @@ static void ftdi_read_data_cb(struct libusb_transfer *transfer)
                 memcpy (tc->buf + tc->offset, ftdi->readbuffer + ftdi->readbuffer_offset, actual_length);
                 DP("tc->buf[0] = %X, tc->buf[1] = %X\n", tc->buf[0], tc->buf[1]);
                 tc->offset += actual_length;
-
+#if (TRACE)
+                DP ("ftdi.readbuffer(%p): ", (ftdi->readbuffer + ftdi->readbuffer_offset));
+                for (i=0; i < (actual_length + 2); i++) {
+                    DPS ("<%.2X>", (ftdi->readbuffer + ftdi->readbuffer_offset)[i]);
+                }
+                DPS ("\n");
+#endif
                 ftdi->readbuffer_offset = 0;
                 ftdi->readbuffer_remaining = 0;
 
@@ -1586,7 +1592,13 @@ static void ftdi_read_data_cb(struct libusb_transfer *transfer)
                 int part_size = tc->size - tc->offset;
                 memcpy (tc->buf + tc->offset, ftdi->readbuffer + ftdi->readbuffer_offset, part_size);
                 tc->offset += part_size;
-
+#if (TRACE)
+                DP ("ftdi.readbuffer(%p): ", (ftdi->readbuffer + ftdi->readbuffer_offset));
+                for (i=0; i < part_size; i++) {
+                    DPS ("<%.2X>", (ftdi->readbuffer + ftdi->readbuffer_offset)[i]);
+                }
+                DPS ("\n");
+#endif
                 ftdi->readbuffer_offset += part_size;
                 ftdi->readbuffer_remaining = actual_length - part_size;
 
@@ -1598,9 +1610,6 @@ static void ftdi_read_data_cb(struct libusb_transfer *transfer)
         }
     }
 
-//    ret = libusb_submit_transfer (transfer);
-//    if (ret < 0)
-//        tc->completed = 1;
     tc->completed = libusb_submit_transfer (transfer);
     return;
 }
@@ -1612,15 +1621,22 @@ static void ftdi_write_data_cb(struct libusb_transfer *transfer)
     struct ftdi_context *ftdi = tc->ftdi;
 
     tc->offset += transfer->actual_length;
-
     if (tc->offset == tc->size)
     {
         tc->completed = 1;
+        DP ("tc(%p) transfer(%p) offset(%d) completed(%d)\n", tc, tc->transfer, tc->offset, tc->completed);
+    }
+    else if (tc->offset > tc->size)
+    {
+        ERRP ("actual write size(%d) is greater than requested(%d)\n", tc->offset, tc->size);
+        assert (0);
     }
     else
     {
+        // not finished yet, keep writing remaining data... necessary?
         int write_size = ftdi->writebuffer_chunksize;
-//        int ret;
+        ERRP ("offset(%d) size(%d) completed(%d)\n", tc->offset, tc->size, tc->completed);
+        ERRP ("writebuffer_chunksize(%d)\n", ftdi->writebuffer_chunksize);
 
         if (tc->offset + write_size > tc->size)
             write_size = tc->size - tc->offset;
@@ -1631,8 +1647,8 @@ static void ftdi_write_data_cb(struct libusb_transfer *transfer)
 //        if (ret < 0)
 //            tc->completed = 1;
         tc->completed = libusb_submit_transfer (transfer);
-        return;
     }
+    return;
 }
 
 
@@ -1670,6 +1686,7 @@ struct ftdi_transfer_control *ftdi_write_data_submit(struct ftdi_context *ftdi, 
     if (!tc)
         return NULL;
 
+    DP("about to libusb_alloc_transfer()...\n");
     transfer = libusb_alloc_transfer(0);
     if (!transfer)
     {
@@ -1845,6 +1862,7 @@ int ftdi_transfer_data_done(struct ftdi_transfer_control *tc)
     struct timeval tv = {0,0};
     int cnt;
 
+    DP ("tc(%p) completed(%d)\n", tc, tc->completed);
     cnt = 0;
     while (!tc->completed)
     {
@@ -1865,6 +1883,7 @@ int ftdi_transfer_data_done(struct ftdi_transfer_control *tc)
                 libusb_handle_events_timeout_completed(tc->ftdi->usb_ctx, &tv, &(tc->completed));
                 DP ("about to libusb_free_transfer()\n");
                 libusb_free_transfer(tc->transfer);
+                tc->transfer = NULL;
                 DP ("after libusb_free_transfer()\n");
             }
             free (tc);
@@ -1898,10 +1917,12 @@ int ftdi_transfer_data_done(struct ftdi_transfer_control *tc)
             ret = -1;
             DP("about to libusb_free_transfer()...\n");
         }
+        DP ("about libusb_free_transfer()\n");
         libusb_free_transfer(tc->transfer);
-        // DP ("after libusb_free_transfer()\n");
+        tc->transfer = NULL;
     }
     free(tc);
+    DP ("ret(%d)\n", ret);
     return ret;
 }
 
