@@ -129,6 +129,7 @@ static int LIBUSB_CALL ftdi_hotplug_callback(libusb_context *ctx, libusb_device 
             if (ret < 0)
             {
                 ERRP("unable to open ftdi device: %d (%s)\n", ret, ftdi_get_error_string(ftdi));
+                ftdi_usb_close(ftdi);
             }
 
         } while (ret != 0);
