@@ -106,21 +106,32 @@ static int LIBUSB_CALL ftdi_hotplug_callback(libusb_context *ctx, libusb_device 
 
         do {
             ret = libusb_handle_events_timeout_completed(ftdi->usb_ctx, &tv, NULL);
-            if (ret < 0) {
+            if (ret != 0) {
                 ERRP ("libusb_handle_events_timeout_completed: %d\n", ret);
             }
-        } while (ret < 0);
+        } while (ret != 0);
 
-        ret = libusb_get_device_descriptor(dev, &desc);
-        if (LIBUSB_SUCCESS != ret) {
-                ERRP ("Error getting device descriptor\n");
-        }
-        ERRP ("Device attached: %04x:%04x\n", desc.idVendor, desc.idProduct);
+        do {
+            ret = libusb_get_device_descriptor(dev, &desc);
+            if (LIBUSB_SUCCESS != ret) {
+                    ERRP ("Error getting device descriptor\n");
+            }
+            ERRP ("Device attached: %04x:%04x\n", desc.idVendor, desc.idProduct);
+        } while (ret != 0);
 
-        ret = ftdi_usb_open_dev(ftdi, dev);
-        if (LIBUSB_SUCCESS != ret) {
-            ERRP ("Can't open ftdi device: %s\n",ftdi_get_error_string(ftdi));
-        }
+        do {
+//            ret = ftdi_usb_open_dev(ftdi, dev);
+//            if (LIBUSB_SUCCESS != ret) {
+//                ERRP ("Can't open ftdi device: %s\n",ftdi_get_error_string(ftdi));
+//            }
+
+            ret = ftdi_usb_open(ftdi, 0x0403, 0x6001);
+            if (ret < 0)
+            {
+                ERRP("unable to open ftdi device: %d (%s)\n", ret, ftdi_get_error_string(ftdi));
+            }
+
+        } while (ret != 0);
 
         return 0;
 }
@@ -1621,32 +1632,29 @@ static void ftdi_write_data_cb(struct libusb_transfer *transfer)
     struct ftdi_context *ftdi = tc->ftdi;
 
     tc->offset += transfer->actual_length;
-    if (tc->offset == tc->size)
+    if (tc->offset >= tc->size)
     {
         tc->completed = 1;
         DP ("tc(%p) transfer(%p) offset(%d) completed(%d)\n", tc, tc->transfer, tc->offset, tc->completed);
     }
-    else if (tc->offset > tc->size)
-    {
-        ERRP ("actual write size(%d) is greater than requested(%d)\n", tc->offset, tc->size);
-        assert (0);
-    }
     else
     {
-        // not finished yet, keep writing remaining data... necessary?
+        // not finished yet, keep writing remaining data...
         int write_size = ftdi->writebuffer_chunksize;
-        ERRP ("offset(%d) size(%d) completed(%d)\n", tc->offset, tc->size, tc->completed);
-        ERRP ("writebuffer_chunksize(%d)\n", ftdi->writebuffer_chunksize);
+        int ret;
+        DP ("offset(%d) size(%d) completed(%d)\n", tc->offset, tc->size, tc->completed);
+        DP ("writebuffer_chunksize(%d)\n", ftdi->writebuffer_chunksize);
 
-        if (tc->offset + write_size > tc->size)
+        if (tc->offset + write_size > tc->size) {
             write_size = tc->size - tc->offset;
+        }
+        assert (write_size > 0);
 
         transfer->length = write_size;
         transfer->buffer = tc->buf + tc->offset;
-//        ret = libusb_submit_transfer (transfer);
-//        if (ret < 0)
-//            tc->completed = 1;
-        tc->completed = libusb_submit_transfer (transfer);
+        ret = libusb_submit_transfer (transfer);
+        if (ret < 0)
+            tc->completed = 1;
     }
     return;
 }
@@ -1883,7 +1891,6 @@ int ftdi_transfer_data_done(struct ftdi_transfer_control *tc)
                 libusb_handle_events_timeout_completed(tc->ftdi->usb_ctx, &tv, &(tc->completed));
                 DP ("about to libusb_free_transfer()\n");
                 libusb_free_transfer(tc->transfer);
-                tc->transfer = NULL;
                 DP ("after libusb_free_transfer()\n");
             }
             free (tc);
@@ -1905,21 +1912,10 @@ int ftdi_transfer_data_done(struct ftdi_transfer_control *tc)
     if (tc->transfer) {
         if (tc->transfer->status != LIBUSB_TRANSFER_COMPLETED) {
             ERRP ("ERROR transfer->status(%d)\n", tc->transfer->status);
-            DP("about to libusb_cancel_transfer()...\n");
-            ret = libusb_cancel_transfer(tc->transfer);
-            if (ret == 0) { // successfully canceled
-                DP("about to libusb_handle_events_timeout_completed()...\n");
-                assert (tc->ftdi->usb_dev != NULL);
-                libusb_handle_events_timeout_completed(tc->ftdi->usb_ctx, &tv, &(tc->completed));
-            } else {
-                ERRP("ERROR with libusb_cancel_transfer() ret(%d)\n", ret);
-            }
             ret = -1;
-            DP("about to libusb_free_transfer()...\n");
         }
         DP ("about libusb_free_transfer()\n");
         libusb_free_transfer(tc->transfer);
-        tc->transfer = NULL;
     }
     free(tc);
     DP ("ret(%d)\n", ret);
