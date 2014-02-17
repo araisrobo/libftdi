@@ -52,6 +52,8 @@ int main(int argc, char **argv)
 {
     struct ftdi_context *ftdi;
     int i, t;
+    int err_cnt;
+    int ret;
     unsigned char *txbuf;
     unsigned char *rxbuf;
     double start, duration, plan;
@@ -184,29 +186,108 @@ int main(int argc, char **argv)
     // don't wait for more data to arrive, take what we get and keep on sending
     // yes, we really would like to have libusb 1.0+ with async read/write...
     ftdi->usb_read_timeout=1;
+            
+    i = ftdi_usb_reset(ftdi);
+    fprintf(stderr,"ftdi_usb_reset() %d: %s\n",
+            i, ftdi_get_error_string(ftdi));
 
     i=0;
+    err_cnt = 0;
     while (i < datasize)
     {
-        int sendsize=txchunksize;
+        int sendsize = txchunksize;
         if (i+sendsize > datasize)
             sendsize=datasize-i;
 
         if ((sendsize=ftdi_write_data(ftdi, txbuf, sendsize)) < 0)
         {
+            // ftdi_usb_reset(ftdi);
             fprintf(stderr,"write failed at %d: %s\n",
                     i, ftdi_get_error_string(ftdi));
-            retval = EXIT_FAILURE;
-            goto do_close;
+            sendsize = 0;
+            err_cnt += 1;
+            if (err_cnt > 10)
+            {
+                retval = EXIT_FAILURE;
+                goto do_close;
+            }
+            
+            sleep (1);
+
+            // if (ftdi_usb_open_string(ftdi, devicedesc) < 0)
+            // {
+            //     fprintf(stderr,"Can't open ftdi device: %s\n",ftdi_get_error_string(ftdi));
+            // }
+
+            if ((ret = ftdi_usb_close(ftdi)) < 0)
+            {
+                fprintf(stderr, "unable to close ftdi device: %d (%s)\n", ret, ftdi_get_error_string(ftdi));
+                // goto do_close;
+            }
+            ftdi_deinit(ftdi);
+            if (ftdi_init(ftdi) < 0)
+            {
+                fprintf(stderr, "ftdi_init failed\n");
+                // goto do_close;
+            }
+            ftdi->usb_read_timeout = 1000;
+            ftdi->usb_write_timeout = 1000;
+            ftdi->writebuffer_chunksize = txchunksize;
+            if ((ret = ftdi_read_data_set_chunksize(ftdi, txchunksize)) < 0) {
+                fprintf(stderr, "ftdi_read_data_set_chunksize(): %d (%s)\n",
+                        ret, ftdi_get_error_string(ftdi));
+                // goto do_close;
+            }
+
+            if ((ret = ftdi_usb_open(ftdi, 0x0403, 0x6001)) < 0)
+            {
+                fprintf(stderr, "unable to open ftdi device: %d (%s)\n", ret, ftdi_get_error_string(ftdi));
+                // goto do_deinit;
+            }
+
+            if ((ret = ftdi_set_latency_timer(ftdi, 1)) < 0)
+            {
+                fprintf(stderr, "ftdi_set_latency_timer(): %d (%s)\n", ret, ftdi_get_error_string(ftdi));
+                // goto do_deinit;
+            }
+            
+            fprintf(stderr, "board_reconnect\n");
+
+
+
+        } else 
+        {
+            fprintf(stderr,"write passed at %d\n", i);
+            err_cnt = 0;
         }
 
         i+=sendsize;
 
-        if (test_mode==BITMODE_SYNCBB)
+        // if (test_mode==BITMODE_SYNCBB)
+        // {
+        //     // read the same amount of data as sent
+        //     ftdi_read_data(ftdi, rxbuf, sendsize);
+        // }
+
+        // to flush rx queue
+        while ((ret = ftdi_read_data (ftdi, rxbuf, 1)) > 0) 
         {
-            // read the same amount of data as sent
-            ftdi_read_data(ftdi, rxbuf, sendsize);
+            fprintf (stderr, "flush %d byte\n", ret);
+            if (ftdi->readbuffer_remaining < txchunksize) 
+            {
+                fprintf (stderr, "flush %u byte\n", ftdi->readbuffer_remaining);
+                ftdi_read_data (ftdi,
+                                rxbuf,
+                                ftdi->readbuffer_remaining);
+            } else
+            {
+                fprintf (stderr, "flush %u byte\n", txchunksize);
+                ftdi_read_data (ftdi,
+                                rxbuf,
+                                txchunksize);
+            }
         }
+
     }
 
     duration=get_prec_time()-start;

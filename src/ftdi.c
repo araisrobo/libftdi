@@ -95,65 +95,73 @@ static void ftdi_usb_close_internal (struct ftdi_context *ftdi)
     DP ("end\n");
 }
 
-static int LIBUSB_CALL ftdi_hotplug_callback(libusb_context *ctx, libusb_device *dev, libusb_hotplug_event event, void *user_data)
+static int ftdi_hotplug_callback(libusb_context *ctx,
+                                     libusb_device *dev,
+                                     libusb_hotplug_event event,
+                                     void *user_data)
 {
-        struct libusb_device_descriptor desc;
-        int ret;
-        struct ftdi_context * ftdi; 
-        struct timeval tv = {0,0};
+    struct libusb_device_descriptor desc;
+    int ret;
+    struct ftdi_context * ftdi;
 
-        ftdi = (struct ftdi_context *) user_data;
+    ftdi = (struct ftdi_context *) user_data;
 
-        do {
-            ret = libusb_handle_events_timeout_completed(ftdi->usb_ctx, &tv, NULL);
-            if (ret != 0) {
-                ERRP ("libusb_handle_events_timeout_completed: %d\n", ret);
-            }
-        } while (ret != 0);
-
-        do {
-            ret = libusb_get_device_descriptor(dev, &desc);
-            if (LIBUSB_SUCCESS != ret) {
-                    ERRP ("Error getting device descriptor\n");
-            }
-            ERRP ("Device attached: %04x:%04x\n", desc.idVendor, desc.idProduct);
-        } while (ret != 0);
-
-        do {
-//            ret = ftdi_usb_open_dev(ftdi, dev);
-//            if (LIBUSB_SUCCESS != ret) {
-//                ERRP ("Can't open ftdi device: %s\n",ftdi_get_error_string(ftdi));
-//            }
-
-            ret = ftdi_usb_open(ftdi, 0x0403, 0x6001);
-            if (ret < 0)
-            {
-                ERRP("unable to open ftdi device: %d (%s)\n", ret, ftdi_get_error_string(ftdi));
-                ftdi_usb_close(ftdi);
-            }
-
-        } while (ret != 0);
-
-        return 0;
-}
-
-static int LIBUSB_CALL ftdi_hotplug_callback_detach(libusb_context *ctx, libusb_device *dev, libusb_hotplug_event event, void *user_data)
-{
-        struct ftdi_context * ftdi;
-        struct libusb_device_descriptor desc;
-        int ret;
-
-        ftdi = (struct ftdi_context *) user_data;
+    assert (event == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED);
+    do {
         ret = libusb_get_device_descriptor(dev, &desc);
         if (LIBUSB_SUCCESS != ret) {
-                ERRP ("Error getting device descriptor\n");
+            ERRP ("Error getting device descriptor\n");
+        } else {
+            ERRP ("Device attached: %04x:%04x\n", desc.idVendor, desc.idProduct);
         }
-        ERRP ("Device detached: %04x:%04x\n", desc.idVendor, desc.idProduct);
+    } while (ret != 0);
 
-        assert (ftdi != NULL);
-        ftdi->usb_connected = 0;
+    ret = ftdi_usb_open_dev(ftdi, dev);
+    if (LIBUSB_SUCCESS != ret)
+    {
+        ERRP("Can't open ftdi device: %s\n", ftdi_get_error_string(ftdi));
+    }
 
-        return 0;
+//    ret = ftdi_usb_open(ftdi, 0x0403, 0x6001);
+//    if (ret < 0)
+//    {
+//        ERRP("unable to open ftdi device: %d (%s)\n", ret, ftdi_get_error_string(ftdi));
+//    }
+
+    return 0;
+}
+
+static int ftdi_hotplug_callback_detach(libusb_context *ctx, libusb_device *dev, libusb_hotplug_event event, void *user_data)
+{
+    struct ftdi_context * ftdi;
+    struct libusb_device_descriptor desc;
+    int ret;
+
+    assert(event == LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT);
+
+    ftdi = (struct ftdi_context *) user_data;
+    ret = libusb_get_device_descriptor(dev, &desc);
+    if (LIBUSB_SUCCESS != ret)
+    {
+        ERRP("Error getting device descriptor\n");
+    } else
+    {
+        ERRP("Device detached: %04x:%04x\n", desc.idVendor, desc.idProduct);
+    }
+
+//    if (LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT == event)
+//    {
+//        if (ftdi->usb_dev)
+//        {
+//            libusb_close(ftdi->usb_dev);
+//            ftdi->usb_dev = NULL;
+//        }
+//    }
+
+    assert(ftdi != NULL);
+    ftdi->usb_connected = 0;
+
+    return 0;
 }
 
 /**
