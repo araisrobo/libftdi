@@ -78,7 +78,7 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY  ${CPACK_PACKAGE_DESCRIPTION}
                                        )
 # Package settings
 if ( UNIX )
-  set(CPACK_GENERATOR                    "DEB;RPM")
+  set(CPACK_GENERATOR                    "DEB") # was: "DEB;RPM"
   set(CPACK_CMAKE_GENERATOR              "Unix Makefiles")
   set(CPACK_PACKAGE_NAME                 ${PROJECT_NAME})
   set(CPACK_PACKAGE_FILE_NAME            ${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}${PACK_ARCH})
